@@ -12,3 +12,6 @@
 	path = NutShell
 	url = https://github.com/OSCPU/NutShell
 	branch = difftest
+[submodule "riscv-isa-sim"]
+	path = riscv-isa-sim
+	url = https://github.com/Siudya/riscv-isa-sim.git
