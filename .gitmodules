@@ -11,3 +11,6 @@
 [submodule "riscv-isa-sim"]
 	path = riscv-isa-sim
 	url = https://github.com/Siudya/riscv-isa-sim.git
+[submodule "difftest"]
+	path = difftest
+	url = https://github.com/OpenXiangShan/difftest.git

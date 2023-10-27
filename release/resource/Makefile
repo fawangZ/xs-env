@@ -51,7 +51,7 @@ verdi:
 	cd $(SIM_DIR)/$(RUN_BIN) && verdi -sv -2001 +verilog2001ext+v +systemverilogext+v -ssf tb_top.vf -dbdir simv.daidir -f sim_flist.f
 
 clean:
-	rm -rf sim/*
+	rm -rf sim*
 	touch cpu.f
 	touch srams.f
 	rm cpu.f
