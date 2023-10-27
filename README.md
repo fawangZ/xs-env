@@ -2,7 +2,7 @@ XiangShan Nanhu Release
 ==================
 
 ```sh
-git clone https://github.com/OpenXiangShan/xs-env
+git clone https://github.com/fawangZ/xs-env.git -b release-nh3 
 cd xs-env
 source env.sh
 cd release
