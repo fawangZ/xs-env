@@ -13,7 +13,7 @@ RELEASE_BIN_PATH=$(RELEASE_PATH)/bin
 RELEASE_ENV_PATH=$(RELEASE_PATH)/env
 RELEASE_DIFFTEST_PATH=$(RELEASE_PATH)/env/difftest
 RELEASE_SIM_NEMU_PATH=$(RELEASE_PATH)/sim_nemu
-RELEASE_SIM_SPIKE_PATH=$(RELEASE_PATH)/sim_spike
+RELEASE_SIM_SPIKE_PATH=$(RELEASE_PATH)/sim
 
 # ------------------------------------------------------------------------------
 # 0 release
@@ -59,7 +59,7 @@ rtl-release: release-simrtl release-rtl
 
 release-xstop: $(RELEASE_PATH)
 	$(MAKE) -C $(NOOP_HOME) verilog VCS=1 NUM_CORES=4 PREFIX=$(PREFIX)
-	python3 scripts/parser.py XSTop --prefix=bosc_ --build-dir=$(NOOP_HOME)/build
+	python scripts/parser.py XSTop --prefix=bosc_ --build-dir=$(NOOP_HOME)/build
 	sed -i '/assign _core_with_l2_1_reset/i\  wire reset_othercores = 1'"'"'b0;\n  wire clock_enable = 1'"'"'b1;' $(PREFIX)XSTop/$(PREFIX)XSTop/$(PREFIX)XSTop.sv
 	sed -i 's/_core_with_l2_[123]_reset =/& reset_othercores \|/' $(PREFIX)XSTop/$(PREFIX)XSTop/$(PREFIX)XSTop.sv
 	sed -i '/XSTile core_with_l2_/{n;s/(io_clock/& \& clock_enable/;}' $(PREFIX)XSTop/$(PREFIX)XSTop/$(PREFIX)XSTop.sv
@@ -73,7 +73,7 @@ release-rtl: $(TEMP_PATH)
 release-simtop: $(RELEASE_ENV_PATH)
 	$(MAKE) -C $(NOOP_HOME) sim-verilog VCS=1 NUM_CORES=4
 	find $(NOOP_HOME)/difftest/src/test/vsrc/common -name "*.v" |xargs -n1 cat >> $(NOOP_HOME)/build/SimTop.sv
-	python3 scripts/parser.py SimTop --ignore XSTop --build-dir=$(NOOP_HOME)/build
+	python scripts/parser.py SimTop --ignore XSTop --build-dir=$(NOOP_HOME)/build
 	sed -i 's/XSTop l_soc/bosc_&/' SimTop/SimTop/SimTop.sv
 	#rm SimTop/SimTop/RAMHelper.sv
 	rm -rf $(RELEASE_ENV_PATH)/SimTop
