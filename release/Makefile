@@ -4,6 +4,8 @@
 
 RELEASE_NEMU_CONFIG=riscv64-xs-nh3
 
+CORES?=4
+
 RELEASE_DATE = $(shell date +"%Y%m%d")
 
 TEMP_PATH=./temp
@@ -12,8 +14,8 @@ RELEASE_REF_PATH=$(RELEASE_PATH)/ref
 RELEASE_BIN_PATH=$(RELEASE_PATH)/bin
 RELEASE_ENV_PATH=$(RELEASE_PATH)/env
 RELEASE_DIFFTEST_PATH=$(RELEASE_PATH)/env/difftest
-RELEASE_SIM_NEMU_PATH=$(RELEASE_PATH)/sim_nemu
 RELEASE_SIM_SPIKE_PATH=$(RELEASE_PATH)/sim
+RELEASE_SIM_NEMU_PATH=$(RELEASE_PATH)/sim_nemu
 
 # ------------------------------------------------------------------------------
 # 0 release
@@ -26,28 +28,28 @@ release:
 misc-release: release-nemu release-spike release-case release-difftest release-resources
 
 $(TEMP_PATH):
-	mkdir -p $(TEMP_PATH)
+	mkdir -p $@
 
 $(RELEASE_PATH):
-	mkdir -p $(RELEASE_PATH)
+	mkdir -p $@
 
 $(RELEASE_REF_PATH):
-	mkdir -p $(RELEASE_REF_PATH)
+	mkdir -p $@
 
 $(RELEASE_BIN_PATH):
-	mkdir -p $(RELEASE_BIN_PATH)
+	mkdir -p $@
 
 $(RELEASE_ENV_PATH):
-	mkdir -p $(RELEASE_ENV_PATH)
+	mkdir -p $@
 
 $(RELEASE_DIFFTEST_PATH):
-	mkdir -p $(RELEASE_DIFFTEST_PATH)
+	mkdir -p $@
 
 $(RELEASE_SIM_NEMU_PATH):
-	mkdir -p $(RELEASE_SIM_NEMU_PATH)
+	mkdir -p $@
 
 $(RELEASE_SIM_SPIKE_PATH):
-	mkdir -p $(RELEASE_SIM_SPIKE_PATH)
+	mkdir -p $@
 
 # ------------------------------------------------------------------------------
 # 1 release rtl
@@ -58,11 +60,15 @@ PREFIX = bosc_
 rtl-release: release-simrtl release-rtl 
 
 release-xstop: $(RELEASE_PATH)
-	$(MAKE) -C $(NOOP_HOME) verilog VCS=1 NUM_CORES=4 PREFIX=$(PREFIX)
+	$(MAKE) -C $(NOOP_HOME) verilog VCS=1 NUM_CORES=$(CORES) PREFIX=$(PREFIX)
 	python scripts/parser.py XSTop --prefix=bosc_ --build-dir=$(NOOP_HOME)/build
+
+ifeq ($(CORES),4)
 	sed -i '/assign _core_with_l2_1_reset/i\  wire reset_othercores = 1'"'"'b0;\n  wire clock_enable = 1'"'"'b1;' $(PREFIX)XSTop/$(PREFIX)XSTop/$(PREFIX)XSTop.sv
 	sed -i 's/_core_with_l2_[123]_reset =/& reset_othercores \|/' $(PREFIX)XSTop/$(PREFIX)XSTop/$(PREFIX)XSTop.sv
 	sed -i '/XSTile core_with_l2_/{n;s/(io_clock/& \& clock_enable/;}' $(PREFIX)XSTop/$(PREFIX)XSTop/$(PREFIX)XSTop.sv
+endif
+
 	rm -rf $(RELEASE_PATH)/XSTop
 	mv -f $(PREFIX)XSTop $(RELEASE_PATH)/rtl
 
@@ -71,11 +77,10 @@ release-rtl: $(TEMP_PATH)
 	$(MAKE) release-xstop NOOP_HOME=$(abspath $(TEMP_PATH)/_rtl_build)
 
 release-simtop: $(RELEASE_ENV_PATH)
-	$(MAKE) -C $(NOOP_HOME) sim-verilog VCS=1 NUM_CORES=4
+	$(MAKE) -C $(NOOP_HOME) sim-verilog VCS=1 NUM_CORES=$(CORES)
 	find $(NOOP_HOME)/difftest/src/test/vsrc/common -name "*.v" |xargs -n1 cat >> $(NOOP_HOME)/build/SimTop.sv
 	python scripts/parser.py SimTop --ignore XSTop --build-dir=$(NOOP_HOME)/build
 	sed -i 's/XSTop l_soc/bosc_&/' SimTop/SimTop/SimTop.sv
-	#rm SimTop/SimTop/RAMHelper.sv
 	rm -rf $(RELEASE_ENV_PATH)/SimTop
 	mv -f SimTop/SimTop $(RELEASE_ENV_PATH)
 
@@ -104,15 +109,25 @@ release-spike: $(RELEASE_REF_PATH) $(RELEASE_PATH)
 # 3 release case and am
 # ------------------------------------------------------------------------------
 
-CASES = coremark microbench dhrystone whetstone stream hello
+APPS = coremark microbench dhrystone whetstone stream hello
+AMTESTS = rtc;r mmu;s dcache;b plic;e clint;i dma;x
+CACHETESTS = icache llc
 ARCH = riscv64-xs-nhv3
 
 release-case: $(RELEASE_BIN_PATH)
 	$(MAKE) -C $(AM_HOME) clean
 	cp -r $(AM_HOME) $(RELEASE_PATH)
-	@$(foreach CASE, $(CASES), \
-		$(MAKE) -C $(AM_HOME)/apps/$(CASE) ARCH=$(ARCH); \
-		cp $(AM_HOME)/apps/$(CASE)/build/$(CASE)-$(ARCH).bin $(RELEASE_BIN_PATH)/$(CASE).bin; \
+	@$(foreach APP, $(APPS), \
+		$(MAKE) -C $(AM_HOME)/apps/$(APP) ARCH=$(ARCH); \
+		cp $(AM_HOME)/apps/$(APP)/build/$(APP)-$(ARCH).bin $(RELEASE_BIN_PATH)/$(APP).bin; \
+	)
+	$(foreach AMTEST, $(AMTESTS), \
+		$(MAKE) -C $(AM_HOME)/tests/amtest ARCH=$(ARCH) mainargs=$(lastword $(subst ;, ,$(AMTEST))); \
+		cp $(AM_HOME)/tests/amtest/build/amtest-$(ARCH).bin $(RELEASE_BIN_PATH)/$(firstword $(subst ;, ,$(AMTEST))).bin; \
+	)
+	$(foreach CACHETEST, $(CACHETESTS), \
+		$(MAKE) -C $(AM_HOME)/tests/cacheoptest/$(CACHETEST) ARCH=$(ARCH); \
+		cp $(AM_HOME)/tests/cacheoptest/$(CACHETEST)/build/$(CACHETEST)-$(ARCH).bin $(RELEASE_BIN_PATH)/$(CACHETEST).bin; \
 	)
 
 # ------------------------------------------------------------------------------
@@ -122,7 +137,9 @@ release-case: $(RELEASE_BIN_PATH)
 release-difftest: $(RELEASE_DIFFTEST_PATH)
 	cp -r $(DIFF_HOME)/config $(RELEASE_DIFFTEST_PATH)
 	cp -r $(DIFF_HOME)/src $(RELEASE_DIFFTEST_PATH)
+ifeq ($(CORES),4)
 	sed -i '/endmodule/i\initial begin\n  force sim.l_soc.reset_othercores = 1'"'"'b1;\n  #50;\n  force sim.l_soc.clock_enable = 1'"'"'b0;\nend' $(RELEASE_DIFFTEST_PATH)/src/test/vsrc/vcs/top.v
+endif
 
 # ------------------------------------------------------------------------------
 # 5 release resource
