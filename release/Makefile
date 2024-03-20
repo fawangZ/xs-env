@@ -83,6 +83,7 @@ release-simtop: $(RELEASE_ENV_PATH)
 	sed -i 's/XSTop l_soc/bosc_&/' SimTop/SimTop/SimTop.sv
 	rm -rf $(RELEASE_ENV_PATH)/SimTop
 	mv -f SimTop/SimTop $(RELEASE_ENV_PATH)
+	mv  $(NOOP_HOME)/build/generated-src $(RELEASE_DIFFTEST_PATH)/src/test/csrc
 
 release-simrtl: $(TEMP_PATH)
 	cp -r $(NOOP_HOME) $(TEMP_PATH)/_simrtl_build

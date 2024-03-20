@@ -6,7 +6,7 @@ VCS_SIM_DIR ?= ../sim
 SIM_CSRC_DIR = $(abspath ./difftest/src/test/csrc/common)
 SIM_CXXFILES = $(shell find $(SIM_CSRC_DIR) -name "*.cpp")
 
-GEN_CSRC_DIR = $(abspath ./difftest/src/test/csrc/artifacts)
+GEN_CSRC_DIR = $(abspath ./difftest/src/test/csrc/generated-src)
 GEN_CXXFILES = $(shell find $(GEN_CSRC_DIR) -name "*.cpp")
 
 PLUGIN_CSRC_DIR =  $(abspath ./difftest/src/test/csrc/plugin/spikedasm)

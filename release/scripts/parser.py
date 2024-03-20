@@ -1,10 +1,12 @@
 #! /usr/bin/env python3
 
 import argparse
+import glob
 import os
 import re
 from datetime import date
 from shutil import copy, move
+import subprocess
 
 import xlsxwriter
 
@@ -40,7 +42,8 @@ class VIO(object):
         return str(self) < str(other)
 
 class VModule(object):
-    module_re = re.compile(r'^\s*module\s*(\w+)\s*(#\(?|)\s*(\(.*|)\s*$')
+    # module_re = re.compile(r'^\s*module\s*(\w+)\s*(#\(?|)\s*(\(.*|)\s*$')
+    module_re = re.compile(r'^\s*module\s+(\w+)\s*(#\s*\(.+\))?\s*(import\s+\w+\s*::\*\s*;)?\s*(#\s*\()?')
     io_re = re.compile(r'^\s*(input|output)\s*(\[\s*\d+\s*:\s*\d+\s*\]|)\s*(\w+),?\s*$')
     submodule_re = re.compile(r'^\s*(\w+)\s*(#\(.*\)|)\s*(\w+)\s*\(\s*(|//.*)\s*$')
     difftest_module_re = re.compile(r'^  \w*Difftest\w+\s+\w+ \( //.*$')
@@ -290,10 +293,10 @@ class VCollection(object):
                     f.writelines(module.get_lines())
         return True
 
-    def dump_negedge_modules_to_file(self, name, output_dir, with_submodule=True, try_prefix=None):
+    def dump_negedge_modules_to_file(self, name, output_dir, with_submodule=True, try_prefix=None, ignore_modules=None):
         print("Dump negedge module {} to {}...".format(name, output_dir))
         negedge_modules = []
-        self.get_module(name, negedge_modules, "NegedgeDataModule_", with_submodule=with_submodule, try_prefix=try_prefix)
+        self.get_module(name, negedge_modules, "NegedgeDataModule_", with_submodule=with_submodule, try_prefix=try_prefix, ignore_modules=ignore_modules)
         negedge_modules_sort = []
         for negedge in negedge_modules:
             re_degits = re.compile(r".*[0-9]$")
@@ -355,7 +358,7 @@ def create_verilog(files, top_module, config, try_prefix=None, ignore_modules=No
     today = date.today()
     directory = f'{top_module}'
     success = collection.dump_to_file(top_module, os.path.join(directory, top_module), try_prefix=try_prefix, ignore_modules=ignore_modules)
-    collection.dump_negedge_modules_to_file(top_module, directory, try_prefix=try_prefix)
+    collection.dump_negedge_modules_to_file(top_module, directory, try_prefix=try_prefix, ignore_modules=ignore_modules)
     if not success:
         return None, None
     return collection, os.path.realpath(directory)
@@ -694,6 +697,8 @@ if __name__ == "__main__":
 
     build_path = args.build_dir
     assert(build_path is not None)
+
+
     files = get_files(build_path)
     if args.include is not None:
         for inc_path in args.include.split(","):
@@ -706,6 +711,10 @@ if __name__ == "__main__":
     if module_prefix is not None:
         top_module = f"{module_prefix}{top_module}"
         ignore_modules += list(map(lambda x: module_prefix + x, ignore_modules))
+        ignore_modules.append(f"{module_prefix}TLROT_top")
+    else:  
+        ignore_modules.append("TLROT_top")  
+
 
     print(f"Top-level Module: {top_module} with prefix {module_prefix}")
     print(f"Config:           {config}")
@@ -724,3 +733,40 @@ if __name__ == "__main__":
             create_sram_xlsx(out_dir, collection, sram_conf, top_module, try_prefix=module_prefix)
     if not args.no_mbist_files:
         copy_mbist_files(mbist_dir, build_path)
+
+    rot_path = build_path+'/../src/main/resources/TLROT/'
+
+    if os.path.exists(rot_path):
+        rot_rtl_dir = os.path.join(out_dir, "TLROT")
+        if not (os.path.isdir(rot_rtl_dir)):
+            os.makedirs(rot_rtl_dir)
+        verilog_files = glob.glob(os.path.join(rot_path, '**/*.sv'), recursive=True) + \
+                glob.glob(os.path.join(rot_path, '**/*.v'), recursive=True) + \
+                glob.glob(os.path.join(rot_path, '**/*.svh'), recursive=True)
+        for file_path in verilog_files:
+            file_name = os.path.basename(file_path)
+            destination_path = os.path.join(rot_rtl_dir, file_name)
+            copy(file_path, destination_path)
+        print("Copy TLROT files done!")
+
+        # gen a TLROT filelist
+        VCS_filelist = os.path.join(rot_path, "vcs_filelist")
+        TLROT_filelist = os.path.join(out_dir, "TLROT.f")
+
+        rot_basename = [os.path.basename(file_path) for file_path in verilog_files]
+        
+        with open(VCS_filelist, 'r') as file:
+            with open(TLROT_filelist, 'w') as new_file:
+                for line in file:
+                    line = line.strip()
+                    file_name = line.split('/')[-1]
+                    new_line = f'/TLROT/{file_name}\n'
+                    new_file.write(new_line)
+                    if file_name not in rot_basename:
+                        print(f'{file_name} in TLROT missed!')
+                new_file.write(f'/TLROT/TLROT_top.sv\n')
+
+        print(f'TLROT processed file names have been written to {TLROT_filelist}')
+            
+
+
