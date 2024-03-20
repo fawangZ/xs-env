@@ -14,3 +14,6 @@
 	path = Nanhu-V3
 	url = git@github.com:Siudya/Nanhu-V3.git
 	branch = MMIO
+[submodule "NEMU"]
+	path = NEMU
+	url = https://github.com/OpenXiangShan/NEMU.git
